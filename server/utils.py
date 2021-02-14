@@ -14,7 +14,7 @@ handler = logging.FileHandler(SERVER_LOG_PATH)
 formatter = logging.Formatter('%(asctime)s %(levelname)s %(message)s')
 handler.setFormatter(formatter)
 logger.addHandler(handler)
-logger.setLevel(logging.WARNING)
+logger.setLevel(logging.INFO)
 
 
 def server_info():
@@ -38,5 +38,5 @@ class ProblemIOMode:
     standard = "Standard IO"
     file = "File IO"
 
-
+print(get_token().encode("utf-8"))
 token = hashlib.sha256(get_token().encode("utf-8")).hexdigest()

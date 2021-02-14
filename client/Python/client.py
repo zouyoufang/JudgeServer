@@ -22,6 +22,7 @@ class JudgeServerClient(object):
         if data:
             kwargs["data"] = json.dumps(data)
         try:
+            print(url)
             return requests.post(url, **kwargs).json()
         except Exception as e:
             raise JudgeServerClientError(str(e))
@@ -54,7 +55,7 @@ class JudgeServerClient(object):
 
 
 if __name__ == "__main__":
-    token = "YOUR_TOKEN_HERE"
+    token = "2effa3857e10265936474f797f84e173"
 
     c_src = r"""
     #include <stdio.h>
@@ -121,9 +122,9 @@ func main() {
     print("ping")
     print(client.ping(), "\n\n")
 
-    print("compile_spj")
-    print(client.compile_spj(src=c_spj_src, spj_version="2", spj_compile_config=c_lang_spj_compile
-                             ), "\n\n")
+    #print("compile_spj")
+    #print(client.compile_spj(src=c_spj_src, spj_version="2", spj_compile_config=c_lang_spj_compile
+    #                         ), "\n\n")
 
     print("c_judge")
     print(client.judge(src=c_src, language_config=c_lang_config,
@@ -134,7 +135,8 @@ func main() {
     print(client.judge(src=cpp_src, language_config=cpp_lang_config,
                        max_cpu_time=1000, max_memory=1024 * 1024 * 128,
                        test_case_id="normal"), "\n\n")
-
+    import sys
+    sys.exit(0)   
     print("java_judge")
     print(client.judge(src=java_src, language_config=java_lang_config,
                        max_cpu_time=1000, max_memory=256 * 1024 * 1024,

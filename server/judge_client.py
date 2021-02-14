@@ -9,7 +9,7 @@ import psutil
 
 from config import TEST_CASE_DIR, JUDGER_RUN_LOG_PATH, RUN_GROUP_GID, RUN_USER_UID, SPJ_EXE_DIR, SPJ_USER_UID, SPJ_GROUP_GID, RUN_GROUP_GID
 from exception import JudgeClientError
-from utils import ProblemIOMode
+from utils import ProblemIOMode, logger
 
 SPJ_WA = 1
 SPJ_AC = 0
@@ -99,8 +99,10 @@ class JudgeClient(object):
     def _judge_one(self, test_case_file_id):
         test_case_info = self._get_test_case_file_info(test_case_file_id)
         in_file = os.path.join(self._test_case_dir, test_case_info["input_name"])
+        logger.info('in_file:%s', in_file)
 
         if self._io_mode["io_mode"] == ProblemIOMode.file:
+            logger.info('====== self._io_mode["io_mode"] == ProblemIOMode.file')
             user_output_dir = os.path.join(self._submission_dir, str(test_case_file_id))
             os.mkdir(user_output_dir)
             os.chown(user_output_dir, RUN_USER_UID, RUN_GROUP_GID)
@@ -115,6 +117,7 @@ class JudgeClient(object):
             real_user_output_file = user_output_file = os.path.join(self._submission_dir, test_case_file_id + ".out")
             kwargs = {"input_path": in_file, "output_path": real_user_output_file, "error_path": real_user_output_file}
 
+
         command = self._run_config["command"].format(exe_path=self._exe_path, exe_dir=os.path.dirname(self._exe_path),
                                                      max_memory=int(self._max_memory / 1024)).split(" ")
         env = ["PATH=" + os.environ.get("PATH", "")] + self._run_config.get("env", [])
@@ -123,6 +126,7 @@ class JudgeClient(object):
         if isinstance(seccomp_rule, dict):
             seccomp_rule = seccomp_rule[self._io_mode["io_mode"]]
 
+        logger.info(' ============= kwargs:%s command:%s log_path:%s, seccomp_rule_name:%s', kwargs, command, JUDGER_RUN_LOG_PATH,seccomp_rule)
         run_result = _judger.run(max_cpu_time=self._max_cpu_time,
                                  max_real_time=self._max_real_time,
                                  max_memory=self._max_memory,
@@ -143,10 +147,14 @@ class JudgeClient(object):
         # if progress exited normally, then we should check output result
         run_result["output_md5"] = None
         run_result["output"] = None
+        logger.info('run_result:%s, _judger.RESULT_SUCCESS:%s',run_result, _judger.RESULT_SUCCESS)
+
         if run_result["result"] == _judger.RESULT_SUCCESS:
             if not os.path.exists(user_output_file):
                 run_result["result"] = _judger.RESULT_WRONG_ANSWER
+                logger.info('========== output file not existed')
             else:
+                logger.info('========== output file existed')
                 if self._test_case_info.get("spj"):
                     if not self._spj_config or not self._spj_version:
                         raise JudgeClientError("spj_config or spj_version not set")
@@ -159,7 +167,13 @@ class JudgeClient(object):
                         run_result["result"] = _judger.RESULT_SYSTEM_ERROR
                         run_result["error"] = _judger.ERROR_SPJ_ERROR
                 else:
+                    tmp_c = ''
+                    with open(user_output_file, 'r', encoding='utf-8') as f:
+                        tmp_c = f.read()
+                    logger.info('src file path:%s content:%s', user_output_file, tmp_c)
+
                     run_result["output_md5"], is_ac = self._compare_output(test_case_file_id, user_output_file)
+                    logger.info('========== is_ac:%s', is_ac)
                     # -1 == Wrong Answer
                     if not is_ac:
                         run_result["result"] = _judger.RESULT_WRONG_ANSWER
@@ -169,14 +183,16 @@ class JudgeClient(object):
                 with open(user_output_file, "rb") as f:
                     run_result["output"] = f.read().decode("utf-8", errors="backslashreplace")
             except Exception:
+                logger.info('open_file execption:%s', user_output_file)
                 pass
-
+        logger.info('run_result:%s', run_result)
         return run_result
 
     def run(self):
         tmp_result = []
         result = []
         for test_case_file_id, _ in self._test_case_info["test_cases"].items():
+            logger.info('test_case_file_id:%s', test_case_file_id)
             tmp_result.append(self._pool.apply_async(_run, (self, test_case_file_id)))
         self._pool.close()
         self._pool.join()

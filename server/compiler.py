@@ -5,18 +5,22 @@ import os
 from config import COMPILER_LOG_PATH, COMPILER_USER_UID, COMPILER_GROUP_GID
 from exception import CompileError
 
+from utils import logger
 
 class Compiler(object):
     def compile(self, compile_config, src_path, output_dir):
         command = compile_config["compile_command"]
         exe_path = os.path.join(output_dir, compile_config["exe_name"])
         command = command.format(src_path=src_path, exe_dir=output_dir, exe_path=exe_path)
+        # temp solution.
+        command = command.replace(' -std=c++14','')
         compiler_out = os.path.join(output_dir, "compiler.out")
         _command = command.split(" ")
 
         os.chdir(output_dir)
         env = compile_config.get("env", [])
         env.append("PATH=" + os.getenv("PATH"))
+        logger.info('env:%s exe_path:%s args:%s', env, _command[0], _command[1::] )
         result = _judger.run(max_cpu_time=compile_config["max_cpu_time"],
                              max_real_time=compile_config["max_real_time"],
                              max_memory=compile_config["max_memory"],
@@ -34,15 +38,17 @@ class Compiler(object):
                              seccomp_rule_name=None,
                              uid=COMPILER_USER_UID,
                              gid=COMPILER_GROUP_GID)
-
+        logger.info('compiler_out file:' + compiler_out)
+        logger.info('judger_result:%s', result)
         if result["result"] != _judger.RESULT_SUCCESS:
             if os.path.exists(compiler_out):
                 with open(compiler_out, encoding="utf-8") as f:
                     error = f.read().strip()
-                    os.remove(compiler_out)
+                    #os.remove(compiler_out)
+                    logger.info('compiler out:' + error)
                     if error:
                         raise CompileError(error)
             raise CompileError("Compiler runtime error, info: %s" % json.dumps(result))
         else:
-            os.remove(compiler_out)
+            #os.remove(compiler_out)
             return exe_path

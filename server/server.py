@@ -42,7 +42,8 @@ class InitSubmissionEnv(object):
     def __exit__(self, exc_type, exc_val, exc_tb):
         if not DEBUG:
             try:
-                shutil.rmtree(self.work_dir)
+                shutil.rmtree(self.work_dir) #remove temp files
+                pass
             except Exception as e:
                 logger.exception(e)
                 raise JudgeClientError("failed to clean runtime dir")
@@ -70,6 +71,7 @@ class JudgeServer:
         submission_id = uuid.uuid4().hex
 
         is_spj = spj_version and spj_config
+        logger.info('is_spj:%s, JUDGER_WORKSPACE_BASE:%s, compile_config:%s', is_spj, JUDGER_WORKSPACE_BASE, compile_config)
 
         if is_spj:
             spj_exe_path = os.path.join(SPJ_EXE_DIR, spj_config["exe_name"].format(spj_version=spj_version))
@@ -83,32 +85,45 @@ class JudgeServer:
         with InitSubmissionEnv(JUDGER_WORKSPACE_BASE, submission_id=str(submission_id), init_test_case_dir=init_test_case_dir) as dirs:
             submission_dir, test_case_dir = dirs
             test_case_dir = test_case_dir or os.path.join(TEST_CASE_DIR, test_case_id)
+            
+            logger.info('test_case_dir:%s, compile_config:%s', test_case_dir, compile_config)
 
             if compile_config:
                 src_path = os.path.join(submission_dir, compile_config["src_name"])
+                
 
                 # write source code into file
                 with open(src_path, "w", encoding="utf-8") as f:
                     f.write(src)
-                os.chown(src_path, COMPILER_USER_UID, 0)
-                os.chmod(src_path, 0o400)
+                
+                tmp_c = ''
+                with open(src_path, 'r', encoding='utf-8') as f:
+                    tmp_c = f.read()
+                logger.info('fclosed:%s', f.closed)
+                logger.info('src file path:%s content:%s', src_path, tmp_c)
+
+                #print('COMPILER_USER_UID', COMPILER_USER_UID)
+                #os.chown(src_path, COMPILER_USER_UID, 0)
+                #os.chmod(src_path, 0o400)
 
                 # compile source code, return exe file path
                 exe_path = Compiler().compile(compile_config=compile_config,
                                               src_path=src_path,
                                               output_dir=submission_dir)
+                logger.info('exe_path:%s', exe_path)
                 try:
                     # Java exe_path is SOME_PATH/Main, but the real path is SOME_PATH/Main.class
                     # We ignore it temporarily
-                    os.chown(exe_path, RUN_USER_UID, 0)
+                    #os.chown(exe_path, RUN_USER_UID, 0)
                     os.chmod(exe_path, 0o500)
                 except Exception:
+                    logger.info('chmod exception, exe_path:%s', exe_path)
                     pass
             else:
                 exe_path = os.path.join(submission_dir, run_config["exe_name"])
                 with open(exe_path, "w", encoding="utf-8") as f:
                     f.write(src)
-
+            logger.info('preparing test case..............., init_test_case_dir:%s ', init_test_case_dir)
             if init_test_case_dir:
                 info = {"test_case_number": len(test_case), "spj": is_spj, "test_cases": {}}
                 # write test case
@@ -147,7 +162,9 @@ class JudgeServer:
                                        spj_config=spj_config,
                                        output=output,
                                        io_mode=io_mode)
+            logger.info('judge_client:%s',  '\n'.join(['%s:%s' % item for item in judge_client.__dict__.items()]))
             run_result = judge_client.run()
+            logger.info('run_result:%s', run_result)
 
             return run_result
 
@@ -180,6 +197,7 @@ class JudgeServer:
 @app.route('/', defaults={'path': ''})
 @app.route('/<path:path>', methods=["POST"])
 def server(path):
+    print(path)
     if path in ("judge", "ping", "compile_spj"):
         _token = request.headers.get("X-Judge-Server-Token")
         try:
@@ -206,4 +224,4 @@ if DEBUG:
 
 # gunicorn -w 4 -b 0.0.0.0:8080 server:app
 if __name__ == "__main__":
-    app.run(debug=DEBUG)
+    app.run(debug=DEBUG, port=12358)
